@@ -42,36 +42,46 @@ const INITIAL_PRODUCTS = [
 let inMemoryProducts = [...INITIAL_PRODUCTS];
 let pool = null;
 let isConnectedToMySQL = false;
+let lastDbError = null;
 
 async function initDB() {
+  const databaseUrl = process.env.DATABASE_URL || process.env.MYSQL_URL;
   const host = process.env.DB_HOST || process.env.MYSQL_HOST;
   const user = process.env.DB_USER || process.env.MYSQL_USER || 'root';
   const password = process.env.DB_PASSWORD || process.env.MYSQL_PASSWORD || '';
-  const database = process.env.DB_NAME || process.env.MYSQL_DATABASE || 'app_db';
+  const database = process.env.DB_NAME || process.env.MYSQL_DATABASE || 'demo';
   const port = parseInt(process.env.DB_PORT || '3306', 10);
 
-  if (!host) {
-    console.log('ℹ️ [DB] DB_HOST no configurado. Operando en modo In-Memory para demostración.');
+  if (!databaseUrl && !host) {
+    lastDbError = 'Variables DB_HOST ni DATABASE_URL configuradas en el entorno.';
+    console.log(`ℹ️ [DB] ${lastDbError} Operando en modo In-Memory para demostración.`);
     return;
   }
 
   try {
-    pool = mysql.createPool({
-      host,
-      user,
-      password,
-      database,
-      port,
-      waitForConnections: true,
-      connectionLimit: 10,
-      queueLimit: 0
-    });
+    if (databaseUrl) {
+      console.log(`🔄 [DB] Intentando conectar a MySQL vía DATABASE_URL...`);
+      pool = mysql.createPool(databaseUrl);
+    } else {
+      console.log(`🔄 [DB] Intentando conectar a MySQL en ${host}:${port} con usuario "${user}" a la BD "${database}"...`);
+      pool = mysql.createPool({
+        host,
+        user,
+        password,
+        database,
+        port,
+        waitForConnections: true,
+        connectionLimit: 10,
+        queueLimit: 0,
+        connectTimeout: 8000
+      });
+    }
 
-    // Test connection
+    // Probar conexión inmediata
     const connection = await pool.getConnection();
-    console.log(`✅ [DB] Conectado exitosamente a MySQL en ${host}:${port}/${database}`);
+    console.log(`✅ [DB] Conectado exitosamente a MySQL (${host || 'URL'} - BD: ${database})`);
 
-    // Create table if not exists
+    // Crear tabla si no existe
     await connection.query(`
       CREATE TABLE IF NOT EXISTS products (
         id INT AUTO_INCREMENT PRIMARY KEY,
@@ -85,10 +95,10 @@ async function initDB() {
       )
     `);
 
-    // Check count and seed if empty
+    // Sembrar datos iniciales si la tabla está vacía
     const [rows] = await connection.query('SELECT COUNT(*) as count FROM products');
     if (rows[0].count === 0) {
-      console.log('🌱 [DB] Inicializando datos demo en la tabla products...');
+      console.log('🌱 [DB] Inicializando datos demo en la tabla products de MySQL...');
       for (const p of INITIAL_PRODUCTS) {
         await connection.query(
           'INSERT INTO products (name, category, price, stock, image, description) VALUES (?, ?, ?, ?, ?, ?)',
@@ -99,21 +109,37 @@ async function initDB() {
 
     connection.release();
     isConnectedToMySQL = true;
+    lastDbError = null;
   } catch (error) {
-    console.warn(`⚠️ [DB] No se pudo conectar a MySQL (${error.message}). Utilizando modo In-Memory temporal para no interrumpir la demo.`);
+    lastDbError = error.message;
+    console.warn(`⚠️ [DB] No se pudo conectar a MySQL: ${error.message}. Operando en modo In-Memory.`);
     isConnectedToMySQL = false;
   }
 }
 
 async function getProducts() {
+  // Si no está conectado pero hay credenciales, reintentar (por si MySQL tardó en iniciar)
+  if (!isConnectedToMySQL && (process.env.DB_HOST || process.env.DATABASE_URL)) {
+    await initDB();
+  }
+
   if (isConnectedToMySQL && pool) {
-    const [rows] = await pool.query('SELECT * FROM products ORDER BY id DESC');
-    return rows;
+    try {
+      const [rows] = await pool.query('SELECT * FROM products ORDER BY id DESC');
+      return rows;
+    } catch (err) {
+      console.error('Error consultando MySQL, recurriendo a memoria temporal:', err.message);
+      lastDbError = err.message;
+    }
   }
   return inMemoryProducts;
 }
 
 async function addProduct({ name, category, price, stock, image, description }) {
+  if (!isConnectedToMySQL && (process.env.DB_HOST || process.env.DATABASE_URL)) {
+    await initDB();
+  }
+
   if (isConnectedToMySQL && pool) {
     const [result] = await pool.query(
       'INSERT INTO products (name, category, price, stock, image, description) VALUES (?, ?, ?, ?, ?, ?)',
@@ -163,7 +189,10 @@ function getDbStatus() {
   return {
     mode: isConnectedToMySQL ? 'mysql' : 'in-memory',
     connected: isConnectedToMySQL,
-    host: process.env.DB_HOST || 'local/in-memory'
+    host: process.env.DB_HOST || (process.env.DATABASE_URL ? 'via-database-url' : 'no-configurado'),
+    database: process.env.DB_NAME || 'demo',
+    user: process.env.DB_USER || 'pablovaldivia',
+    error: lastDbError
   };
 }
 

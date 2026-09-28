@@ -255,8 +255,8 @@ export default function App() {
             <div style={{ color: '#10b981', fontSize: '1.4rem', fontWeight: '800', marginTop: '6px' }}>
               {serverHealth?.database?.mode === 'mysql' ? '🐬 MySQL' : '⚡ In-Memory'}
             </div>
-            <div style={{ color: '#9ca3af', fontSize: '0.75rem', marginTop: '4px' }}>
-              Host: {serverHealth?.database?.host || 'Auto'}
+            <div style={{ color: '#9ca3af', fontSize: '0.75rem', marginTop: '4px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={serverHealth?.database?.error || ''}>
+              {serverHealth?.database?.error ? `⚠️ ${serverHealth.database.error}` : `Host: ${serverHealth?.database?.host || 'Auto'}`}
             </div>
           </div>
         </div>
