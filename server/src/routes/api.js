@@ -67,13 +67,35 @@ router.post('/reset', async (req, res) => {
 // Diagnostic network endpoint to inspect container IP, subnets, and DNS resolution
 const dns = require('dns').promises;
 const os = require('os');
+const net = require('net');
+
+function checkTcpPort(host, port = 3306, timeout = 400) {
+  return new Promise((resolve) => {
+    const socket = new net.Socket();
+    socket.setTimeout(timeout);
+    socket.once('connect', () => {
+      socket.destroy();
+      resolve({ host, port, open: true });
+    });
+    socket.once('timeout', () => {
+      socket.destroy();
+      resolve({ host, port, open: false, reason: 'timeout' });
+    });
+    socket.once('error', (err) => {
+      resolve({ host, port, open: false, reason: err.code || err.message });
+    });
+    socket.connect(port, host);
+  });
+}
 
 router.get('/debug-network', async (req, res) => {
   const hostsToTest = [
     process.env.DB_HOST,
     'mysql-nextcollege-melsbz',
     'mysql-democicdecommerce-zm7fbw',
-    'host.docker.internal'
+    '172.18.0.1',
+    '172.17.0.1',
+    '127.0.0.1'
   ].filter(Boolean);
 
   const dnsResults = {};
@@ -85,6 +107,18 @@ router.get('/debug-network', async (req, res) => {
       dnsResults[host] = { ok: false, error: err.message };
     }
   }
+
+  // Scan key candidate IPs on port 3306
+  const candidateTargets = ['172.18.0.1', '172.17.0.1'];
+  if (dnsResults['mysql-democicdecommerce-zm7fbw']?.ip) {
+    // Add neighbor IPs in 10.0.1.x
+    for (let i = 1; i <= 254; i++) {
+      candidateTargets.push(`10.0.1.${i}`);
+    }
+  }
+
+  const portScans = await Promise.all(candidateTargets.map(ip => checkTcpPort(ip, 3306, 300)));
+  const open3306 = portScans.filter(p => p.open);
 
   res.json({
     hostname: os.hostname(),
@@ -98,6 +132,7 @@ router.get('/debug-network', async (req, res) => {
       HAS_DATABASE_URL: !!process.env.DATABASE_URL
     },
     dns_tests: dnsResults,
+    open_mysql_ports_found: open3306,
     db_status: db.getDbStatus()
   });
 });
