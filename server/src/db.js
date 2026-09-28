@@ -111,6 +111,60 @@ async function initDB() {
     isConnectedToMySQL = true;
     lastDbError = null;
   } catch (error) {
+    console.warn(`⚠️ [DB] Conexión directa falló: ${error.message}. Escaneando red interna...`);
+    try {
+      const candidates = [];
+      for (let i = 2; i <= 30; i++) candidates.push(`172.18.0.${i}`);
+      for (let i = 1; i <= 254; i++) candidates.push(`10.0.1.${i}`);
+      candidates.push('172.18.0.1', '172.17.0.1');
+
+      const net = require('net');
+      const check = (ip) => new Promise((resolve) => {
+        const s = new net.Socket();
+        s.setTimeout(250);
+        s.once('connect', () => { s.destroy(); resolve(ip); });
+        s.once('timeout', () => { s.destroy(); resolve(null); });
+        s.once('error', () => { resolve(null); });
+        s.connect(3306, ip);
+      });
+
+      const found = (await Promise.all(candidates.map(check))).filter(Boolean);
+      if (found.length > 0) {
+        const discoveredIp = found[0];
+        console.log(`🎯 [DB Discovery] ¡MySQL encontrado automáticamente en IP ${discoveredIp}! Conectando...`);
+        pool = mysql.createPool({
+          host: discoveredIp,
+          user,
+          password,
+          database,
+          port: 3306,
+          waitForConnections: true,
+          connectionLimit: 10,
+          connectTimeout: 5000
+        });
+        const conn = await pool.getConnection();
+        console.log(`✅ [DB] Conectado exitosamente a MySQL en ${discoveredIp}`);
+        await conn.query(`
+          CREATE TABLE IF NOT EXISTS products (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            name VARCHAR(255) NOT NULL,
+            category VARCHAR(100) NOT NULL,
+            price DECIMAL(10,2) NOT NULL,
+            stock INT NOT NULL DEFAULT 0,
+            image VARCHAR(500),
+            description TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+          )
+        `);
+        conn.release();
+        isConnectedToMySQL = true;
+        lastDbError = null;
+        return;
+      }
+    } catch (discoveryErr) {
+      console.warn('Error en escaneo de red:', discoveryErr.message);
+    }
+
     lastDbError = error.message;
     console.warn(`⚠️ [DB] No se pudo conectar a MySQL: ${error.message}. Operando en modo In-Memory.`);
     isConnectedToMySQL = false;

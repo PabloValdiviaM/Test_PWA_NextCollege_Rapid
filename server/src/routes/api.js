@@ -110,6 +110,10 @@ router.get('/debug-network', async (req, res) => {
 
   // Scan key candidate IPs on port 3306
   const candidateTargets = ['172.18.0.1', '172.17.0.1'];
+  // Scan 172.18.0.x bridge subnet (where Dokploy containers live)
+  for (let i = 2; i <= 30; i++) {
+    candidateTargets.push(`172.18.0.${i}`);
+  }
   if (dnsResults['mysql-democicdecommerce-zm7fbw']?.ip) {
     // Add neighbor IPs in 10.0.1.x
     for (let i = 1; i <= 254; i++) {
@@ -117,7 +121,7 @@ router.get('/debug-network', async (req, res) => {
     }
   }
 
-  const portScans = await Promise.all(candidateTargets.map(ip => checkTcpPort(ip, 3306, 300)));
+  const portScans = await Promise.all(candidateTargets.map(ip => checkTcpPort(ip, 3306, 250)));
   const open3306 = portScans.filter(p => p.open);
 
   res.json({
