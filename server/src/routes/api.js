@@ -64,4 +64,43 @@ router.post('/reset', async (req, res) => {
   }
 });
 
+// Diagnostic network endpoint to inspect container IP, subnets, and DNS resolution
+const dns = require('dns').promises;
+const os = require('os');
+
+router.get('/debug-network', async (req, res) => {
+  const hostsToTest = [
+    process.env.DB_HOST,
+    'mysql-nextcollege-melsbz',
+    'mysql-democicdecommerce-zm7fbw',
+    'host.docker.internal'
+  ].filter(Boolean);
+
+  const dnsResults = {};
+  for (const host of hostsToTest) {
+    try {
+      const lookup = await dns.lookup(host);
+      dnsResults[host] = { ok: true, ip: lookup.address };
+    } catch (err) {
+      dnsResults[host] = { ok: false, error: err.message };
+    }
+  }
+
+  res.json({
+    hostname: os.hostname(),
+    interfaces: os.networkInterfaces(),
+    environment: {
+      DB_HOST: process.env.DB_HOST,
+      DB_PORT: process.env.DB_PORT,
+      DB_USER: process.env.DB_USER,
+      DB_NAME: process.env.DB_NAME,
+      HAS_PASSWORD: !!process.env.DB_PASSWORD,
+      HAS_DATABASE_URL: !!process.env.DATABASE_URL
+    },
+    dns_tests: dnsResults,
+    db_status: db.getDbStatus()
+  });
+});
+
 module.exports = router;
+
