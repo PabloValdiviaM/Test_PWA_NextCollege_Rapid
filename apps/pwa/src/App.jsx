@@ -105,11 +105,11 @@ export default function App() {
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <span style={{ fontSize: '1.25rem' }}>📱</span>
-            <h1 style={{ fontSize: '1.15rem', fontWeight: '800', color: 'white', margin: 0 }}>
-              NextCollege <span style={{ color: '#38bdf8' }}>Mobile</span>
+            <h1 style={{ fontSize: '1.1rem', fontWeight: '800', color: 'white', margin: 0 }}>
+              Bienvenidos a <span style={{ color: '#38bdf8' }}>NextCollege</span>
             </h1>
           </div>
-          <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>PWA Demo en Vivo</span>
+          <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>PWA Mobile App</span>
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -157,8 +157,25 @@ export default function App() {
       <main style={{ flex: 1, overflowY: 'auto', padding: '16px', paddingBottom: '90px' }}>
         {tab === 'catalog' && (
           <div className="fade-in">
+            {/* Welcome Hero Card */}
+            <div style={{
+              background: 'linear-gradient(135deg, #1e293b, #0f172a)',
+              border: '1px solid #334155',
+              borderRadius: '12px',
+              padding: '16px',
+              marginBottom: '16px',
+              textAlign: 'center'
+            }}>
+              <h2 style={{ fontSize: '1.2rem', fontWeight: '800', color: 'white', margin: '0 0 6px 0' }}>
+                ¡Bienvenidos a NextCollege! 🎓
+              </h2>
+              <p style={{ fontSize: '0.82rem', color: '#94a3b8', margin: 0 }}>
+                Tu plataforma tecnológica y e-commerce móvil con entrega continua en Dokploy.
+              </p>
+            </div>
+
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-              <h2 style={{ fontSize: '1.1rem', fontWeight: '700', color: '#f8fafc' }}>Catálogo Móvil</h2>
+              <h3 style={{ fontSize: '1rem', fontWeight: '700', color: '#f8fafc', margin: 0 }}>Catálogo de Productos</h3>
               <button
                 onClick={fetchProducts}
                 style={{ background: 'none', border: 'none', color: '#38bdf8', fontSize: '0.85rem', cursor: 'pointer' }}
